@@ -163,5 +163,18 @@ class Graph:
         return ret
 
 
+    def Z(self) -> float:
+        # Z = 1 + Sum_(v in N_u) [S_TR(u,v) + Sum_(w in N_v) [S_TR(u,w)]]
+        return 1
 
+
+    def f_x(self, u: str) -> float:
+        # f_x(u) = [1/Z] * [lambda * r_int * pi_x + 
+        #                   Sum_(v in N_u) [S_TR(u,v) * delta(v,x)] +
+        #                   Sum_(w in N_v) [S_TR(u,w) * delta(w,x)]]
+        # lambda [0,1]: weight representing the contribution of background frequency to the score
+        # r_int: fraction of all interaction pairs that share some function defined in S_R
+        # delta(p,x): 1 if p has function x, 0 otherwise
+        # pi_x: frequency of function x in annotated proteins
+        return 1
 
