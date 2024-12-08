@@ -246,3 +246,40 @@ class Graph:
         # pi_x: frequency of function x in annotated proteins
         return 1
 
+
+    def reweight(self, verbose=False, output_path=None) -> None:
+        edges = self.edges
+        ret = []
+
+        for i in range(len(edges)):
+            edge = edges[i]
+
+            if verbose: 
+                print(f"Edge {i+1}/{len(edges)}")
+                print("Computing Weight")
+
+            r = self.S_R(edge[0], edge[1])
+            ret.append((edge[0], edge[1], r))
+
+            if verbose: 
+                print("Done computing")
+                print("-"*10)
+
+        if output_path is not None:
+
+            if verbose:
+                print(f"Writing output to \'{output_path}\'")
+
+            with open(output_path, "a") as f:
+                for v in ret:
+                    _v = map(str, v)
+                    line = '\t'.join(_v)
+                    f.write(f"{line}\n")
+
+        else:
+            if verbose:
+                print("no path specified")
+
+        if verbose:
+            print("Done")
+
