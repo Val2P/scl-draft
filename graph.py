@@ -1,8 +1,43 @@
 from pyvis.network import Network
 import networkx as nx
+import pandas as pd
+
+class K2Table:
+    def __init__(self):
+        self._t = dict()
+
+    def _key(self, a1, a2):
+        k1 = a1
+        k2 = a2
+
+        # comment this out if keys arent symmetric
+        # ie: table[a,b] != table[b,a]
+        if k1 > k2:
+            k1, k2 = k2, k1
+
+        k = (k1, k2)
+
+        return k
+
+
+
+    def __getitem__(self, args):
+
+        k = self._key(*args)
+        
+        if k in self._t.keys():
+            return self._t[k]
+        else:
+            return None
+
+    def __setitem__(self, keys, value):
+        k = self._key(*keys)
+
+        self._t[k] = value
+
 
 class Graph:
-    def __init__(self, dataset_path: str):
+    def __init__(self, dataset_path: str, database_path: str = None):
 
         edges = list()
         nodes = set()
@@ -32,6 +67,17 @@ class Graph:
 
         self._n_avg = len(edges) / len(nodes)
 
+        if database_path is not None:
+            df = pd.read_csv(database_path, sep='\t')
+            keep = ['Experimental System Type', 'Author', 'Publication Source',
+                   'Systematic Name Interactor A', 'Systematic Name Interactor B', 'Throughput',
+                   'Score', 'Modification', 'Qualifications', 'Tags', 'Source Database']
+            self.df = df[keep]
+            
+            self._mem = K2Table()
+        else:
+            self.df = None
+
 
 
     def visualize(self):
@@ -60,6 +106,9 @@ class Graph:
         """
         lambda function, Bioinformatics equation 2
         TODO modify further to include experimental sources
+
+        lambda = max(0, n_avg * r_int - ...)
+        were r_int is the fraction of all interaction pairs that share some function
         """
 
         diff = u - v
@@ -98,10 +147,29 @@ class Graph:
 
     def _reliability(self, u: str, v: str) -> float:
         """
-        TODO fix later, maybe heuristic this???
-        this thing needs the grid database
+        NOTE: assuming interactions are symmetric, that is, A interacts with B is the same as B interacts with A
+        NOTE: assuming same "weight" of High Throughput and Low Throughput
         """
-        return 1.0
+
+        if self.df is not None:
+            ret = self._mem[u, v]
+
+            if ret is None:
+                col = "Systematic Name Interactor A"
+                u_total = self.df[self.df[col] == u]
+                v_total = self.df[self.df[col] == v]
+                total = u_total.shape[0] + v_total.shape[0]
+
+                col = "Systematic Name Interactor B"
+                uv_total = u_total[self.df[col] == v].shape[0] + v_total[self.df[col] == u].shape[0]
+
+                ret = 1.0 - (1.0 - uv_total/total)**uv_total
+                self._mem[u,v] = ret
+
+
+            return ret
+        else:
+            return 1
 
 
     def S_R(self, u: str, v: str) -> float:
