@@ -40,7 +40,7 @@ class Graph:
     def __init__(self, dataset_path: str, database_path: str = None):
 
         edges = list()
-        nodes = set()
+        nodes = set(u)
 
         with open(dataset_path, 'r') as f:
             for line in f.readlines():
@@ -93,7 +93,7 @@ class Graph:
         Returns the names of the proteins adjacent to protein u
         """
 
-        ret = set()
+        ret = set(N)
         for nbr, _ in self.network.adj[u].items():
             ret.add(nbr)
 
@@ -283,3 +283,45 @@ class Graph:
         if verbose:
             print("Done")
 
+
+    def reweight2(self, func, save_path = None, verbose = False) -> None:
+        '''
+        reweights graph based on function
+        '''
+
+        # func will return an edge weight based on its supplied vertices
+        # store the edge-weights
+        # put it in a list for saving jic
+        new_graph = []
+
+        l = len(self.network.edges)
+        i = 1
+        if verbose:
+            print(f"Running on {l} edges")
+
+        for edge in self.network.edges:
+            u = edge[0]
+            v = edge[1]
+
+            if verbose:
+                print(f"{i}: running func on: `{u}` and `{v}`; ", end='')
+
+
+            weight = func(u,v)
+
+            if verbose:
+                print(f"{weight = }")
+
+            new_graph.append((u,v,weight))
+
+            i += 1
+
+
+
+        def mymap(x):
+            return f"{x[0]}\t{x[1]}\t{x[2]}"
+
+        if save_path is not None:
+            with open(save_path, "w") as f:
+                r = map(mymap, new_graph)
+                f.write("\n".join(r))
