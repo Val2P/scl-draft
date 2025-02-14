@@ -40,7 +40,7 @@ class Graph:
     def __init__(self, dataset_path: str, database_path: str = None):
 
         edges = list()
-        nodes = set(u)
+        nodes = set()
 
         with open(dataset_path, 'r') as f:
             for line in f.readlines():
@@ -85,7 +85,7 @@ class Graph:
         _nt.from_nx(self.network)
 
 
-        _nt.show('nx.html', notebook=False)
+        _nt.show('index.html', notebook=False)
 
 
     def N(self, u: str) -> set[str]:
@@ -93,7 +93,7 @@ class Graph:
         Returns the names of the proteins adjacent to protein u
         """
 
-        ret = set(N)
+        ret = set(u)
         for nbr, _ in self.network.adj[u].items():
             ret.add(nbr)
 
