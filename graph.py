@@ -100,6 +100,28 @@ class Graph:
 
         return ret
 
+    def N_depth(self, u: str, k: int = 0) -> set[str]:
+        """
+        Returns the names of the proteins w/ at most k levels away from u
+        """
+        assert k > -1
+
+        ret = set(u)
+
+        just_added = set(u)
+        
+        # wont run on k = 0, for range(1,1) doesnt run
+        for _ in range(1, k+1):
+            new_neighbors = set()
+            for n in just_added:
+                new_neighbors  = new_neighbors | self.N(n)
+
+            just_added = new_neighbors - ret
+            ret =  ret | just_added
+
+
+        return ret
+
 
 
     def lmbda(self, u: set[str], v: set[str]) -> float:
