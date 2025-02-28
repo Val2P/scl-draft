@@ -37,7 +37,7 @@ class K2Table:
 
 
 class Graph:
-    def __init__(self, dataset_path: str, database_path: str = None):
+    def __init__(self, dataset_path: str, database_path: str|None = None):
 
         edges = list()
         nodes = set()
@@ -45,7 +45,10 @@ class Graph:
         with open(dataset_path, 'r') as f:
             for line in f.readlines():
                 l = line.strip()
-                n1, n2, edge = l.split('\t')
+                x = l.split('\t')
+                if len(x) != 3:
+                    x = l.split(" ")
+                n1, n2, edge = x
 
                 nodes.add(n1)
                 nodes.add(n2)
@@ -87,13 +90,12 @@ class Graph:
 
         _nt.show('index.html', notebook=False)
 
-
     def N(self, u: str) -> set[str]:
         """
         Returns the names of the proteins adjacent to protein u
         """
 
-        ret = set(u)
+        ret = {u}
         for nbr, _ in self.network.adj[u].items():
             ret.add(nbr)
 
@@ -106,14 +108,15 @@ class Graph:
         """
         assert k > -1
 
-        ret = set(u)
 
-        just_added = set(u)
+        ret = {u}
+
+        just_added = {u}
         
         # wont run on k = 0, for range(1,1) doesnt run
         for _ in range(1, k+1):
             new_neighbors = set()
-            for n in just_added:
+            for n in list(just_added):
                 new_neighbors  = new_neighbors | self.N(n)
 
             just_added = new_neighbors - ret
@@ -143,11 +146,44 @@ class Graph:
 
     def S_FS(self, u: str, v: str) -> float:
         """
-        FS Weight function
+        Simple FS Weight function
         """
 
-        n_u = self.N(u)
-        n_v = self.N(v)
+        N = self.N
+
+        n_u = N(u)
+        n_v = N(v)
+
+
+        u_and_v = n_u & n_v
+        u_min_v = n_u - n_v
+        v_min_u = n_v - n_u
+
+
+
+
+        numerator = 2 * len(u_and_v)
+
+        deno_1 = len(u_min_v) + numerator + self.lmbda(n_u, n_v)
+        deno_2 = len(v_min_u) + numerator + self.lmbda(n_v, n_u)
+
+
+        return float(numerator/deno_1) * float(numerator/deno_2)
+
+
+
+    def Depth_FS(self, u: str, v: str, d: int = 0) -> float:
+        """
+        FS Weight function with Depth
+        `N` is the neighbor counting function
+        neighbor counting function is a func that accepts a string and returns a set of neighbor
+        """
+
+        N = lambda x: self.N_depth(x, d)
+
+
+        n_u = N(u)
+        n_v = N(v)
 
 
         u_and_v = n_u & n_v
