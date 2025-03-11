@@ -25,3 +25,9 @@ class Database:
         #     a,b = b,a
 
         return self.df[(self.df[NAME_A] == a) & (self.df[NAME_B == b])]
+
+    def filter_functions(self, a: str, b: str) -> set[str]:
+        rows = self.filter_interactions(a, b)
+        ret = set(rows[EXPERIMENT].unique())
+        return ret
+
