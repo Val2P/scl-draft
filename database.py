@@ -1,4 +1,5 @@
 import pandas as pd
+from functools import lru_cache
 
 NAME_A = "Systematic Name Interactor A"
 NAME_B = "Systematic Name Interactor B"
@@ -20,12 +21,16 @@ class Database:
 
         self.df = self.df[to_retain]
 
+    @lru_cache(maxsize=None)
     def filter_interactions(self, a: str, b: str) -> pd.DataFrame:
         # if a < b:
         #     a,b = b,a
 
-        return self.df[(self.df[NAME_A] == a) & (self.df[NAME_B == b])]
+        ret = self.df[self.df[NAME_A] == a]
+        ret = ret[ret[NAME_B] == b]
+        return ret
 
+    @lru_cache(maxsize=None)
     def filter_functions(self, a: str, b: str) -> set[str]:
         rows = self.filter_interactions(a, b)
         ret = set(rows[EXPERIMENT].unique())

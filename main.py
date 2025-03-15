@@ -1,7 +1,7 @@
 from graph import Graph
 
-TARGET = "KroganCore"
-trials = 5
+TARGET = "Collins"
+trials = 4
 
 
 def ppath(dataset, trialno = None):
@@ -10,15 +10,15 @@ def ppath(dataset, trialno = None):
         return p + dataset + ".txt"
     else:
         return p + dataset + f"v{trialno}.txt"
-PATH = "./datasets"
-G = Graph(ppath(TARGET))
+
+G = Graph(ppath(TARGET), database_path="./database-files/BIOGRID.txt")
 
 
 for i in range(trials):
     run = i+1
     print("Starting run", run)
-    x = lambda u,v: G.Depth_FS(u, v, run)
-    G.reweight2(x, ppath(TARGET, run),True)
+    G.set_depth(run)
+    G.reweight_with_reliability(ppath(TARGET, run),True)
     print("Finished run", run)
 
 

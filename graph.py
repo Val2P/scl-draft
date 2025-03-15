@@ -56,7 +56,7 @@ class Graph:
         self.database: Database|None = None
 
         if database_path is not None:
-            self.database = Database(dataset_path, sep)
+            self.database = Database(database_path, sep)
 
 
     def set_depth(self, n: int):
@@ -286,7 +286,10 @@ class Graph:
         self.edgelist_to_file(new_graph, save_path)
 
 
-    def reweight_with_reliability(self, save_path:str|None=None):
+    def reweight_with_reliability(self, save_path:str|None=None, verbose: bool = False):
+        """
+        SR Function
+        """
 
         assert self.database is not None
 
@@ -298,15 +301,33 @@ class Graph:
         min_r1 = EPSILON
         max_r1 = 0
 
-        # calc each r1 for normalization
+        proteins_with_shared_count = 0
+
+        if verbose:
+            print("Running initial r1 computation for normalization")
+
+        # calc each r1 for normalization, as well as r_int
         # the costly subroutines *should* be cached on computing r1
+        l = len(self.network.edges)
+        i = 1
         for src, dst, _ in self.edges:
+
+            if verbose:
+                print(f"{i}/{l}")
+                i += 1
+
+            F_x = self.database.filter_functions(src, dst)
+            F_y = self.database.filter_functions(dst, src)
+            if len(F_x & F_y) > 0:
+                proteins_with_shared_count += 1
+
             x = self.r1(src, dst)
             if x > EPSILON: continue
 
             min_r1 = min(min_r1, x)
             max_r1 = max(max_r1, x)
 
+            r_int = float(proteins_with_shared_count) / len(self.edges)
 
         def R1(a: str, b: str) -> float|int:
             x = self.r1(a, b)
@@ -314,10 +335,71 @@ class Graph:
 
             numerator = x - min_r1
             denominator = max_r1 - min_r1
-            return numerator / denominator
+            try:
+                return numerator / denominator
+            except:
+                return 0.0
+
+        def SR_term(u: str, v: str) -> float:
+            Nu = self.N_depth(u)
+            Nv = self.N_depth(v)
+            Nu_and_Nv = Nu & Nv
+
+            _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
+
+            lmbda_uv = max(0, _term_uv)
 
 
+            # term a; the first term
+            numerator = 0.0
+            for w in Nu_and_Nv:
+                numerator += R1(u, w) * R1(v, w)
+            numerator *= 2.0
 
+            denominator_a = 0.0
+            for w in Nu:
+                denominator_a += R1(u, w)
+
+            for w in Nu_and_Nv:
+                denominator_a += R1(u, w) * (1 - R1(v, w))
+
+            denominator_b = 0.0
+            for w in Nu_and_Nv:
+                denominator_b += R1(u, w) * R1(v, w)
+
+            denominator = denominator_a + (2 * denominator_b) + lmbda_uv
+
+            try:
+                return numerator / denominator
+            except:
+                return 0.0
+
+
+        if verbose:
+            print("Running reweighting")
+
+        # actual reweighting
+        l = len(self.network.edges)
+        i = 1
+        if verbose:
+            print(f"Running on {l} edges")
+
+        for edge in self.network.edges:
+            u = edge[0]
+            v = edge[1]
+
+            if verbose:
+                print(f"{i}: running func on: `{u}` and `{v}`; ", end='')
+
+
+            weight = SR_term(u,v) * SR_term(v, u)
+
+            if verbose:
+                print(f"{weight = }")
+
+            new_graph.append((u,v,weight))
+
+            i += 1
 
 
         self.edgelist_to_file(new_graph, save_path)
