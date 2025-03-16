@@ -21,6 +21,15 @@ class Database:
 
         self.df = self.df[to_retain]
 
+    def trim_rows(self, l):
+        """
+        - `l` is an iterable of strings
+
+        Filters rows in the dataframe such that only the rows that contain names in l are retained
+        """
+
+        self.df = self.df[self.df[NAME_A].isin(l) | self.df[NAME_B].isin(l)]
+
     @lru_cache(maxsize=None)
     def filter_interactions(self, a: str, b: str) -> pd.DataFrame:
         # if a < b:

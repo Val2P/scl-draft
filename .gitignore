@@ -2,10 +2,12 @@
 __pycache__/**
 lib/**
 nx.html
+*.code-workspace
 
 database/BIOGRID-ALL-4.4.239.tab3.txt
 database/biogrid-sample.txt
 
 datasets/**
+database-files/**
 
 scratch.py

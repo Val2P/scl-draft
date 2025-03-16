@@ -57,6 +57,7 @@ class Graph:
 
         if database_path is not None:
             self.database = Database(database_path, sep)
+            self.database.trim_rows(nodes)
 
 
     def set_depth(self, n: int):
