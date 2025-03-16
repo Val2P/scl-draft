@@ -1,25 +1,24 @@
 from pyvis.network import Network
 import networkx as nx
 import pandas as pd
+from tqdm import tqdm
 
 from database import Database
 
 from functools import lru_cache
+import logging
 
-
-"""
-TODO, FSWeight w/ Depth + Reliability
-1. compute the Neighbor Sets up to depth k
-2. compute the r1(a,b) for each edge, incorporating Neighbor Sets
-3. set up LUT for R1 (normalized r1)
-4. do Chua FS Weight
-"""
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Graph:
     def __init__(self, dataset_path: str, initial_depth:int = 0, database_path: str|None = None, sep:str = '\t'):
 
         edges = list()
         nodes = set()
+
+        logger.info(f"Reading Dataset: {dataset_path}")
 
         with open(dataset_path, 'r') as f:
             for line in f.readlines():
@@ -33,6 +32,7 @@ class Graph:
                 nodes.add(n2)
                 edges.append((n1, n2, {"weight": float(edge), "label": edge}))
 
+        logger.info(f"Finished loading Dataset")
 
         self.edges = edges
         self.nodes = nodes
@@ -55,9 +55,23 @@ class Graph:
 
         self.database: Database|None = None
 
+        self._name = dataset_path
+
         if database_path is not None:
+            logger.info(f"Loading Database: {database_path}")
             self.database = Database(database_path, sep)
             self.database.trim_rows(nodes)
+            logger.info(f"Finished Loading Database")
+
+        # joblib caching
+        # self.N = Cache.cache(self.N)
+        # self.N_depth = Cache.cache(self.N_depth)
+        # self.N_depth_diff = Cache.cache(self.N_depth_diff)
+        # self.N_depth_recursive = Cache.cache(self.N_depth_recursive)
+        # self.N_depth_nx = Cache.cache(self.N_depth_nx)
+        # self.Functions = Functions_Cache.cache(self.Functions)
+        # self.r1 = Cache.cache(self.r1)
+        
 
 
     def set_depth(self, n: int):
@@ -65,9 +79,12 @@ class Graph:
         assert n >= 0
         self.depth = n
 
-        self.N_depth.cache_clear()
+        # self.N_depth.cache_clear()
+        self.N_depth_recursive.cache_clear()
+        self.N_depth_nx.cache_clear()
         self.Functions.cache_clear()
         self.r1.cache_clear()
+        # Cache.clear()
 
 
     def visualize(self):
@@ -105,7 +122,7 @@ class Graph:
 
         return ret
 
-    @lru_cache(maxsize=None)
+    # @lru_cache(maxsize=None)
     def N_depth(self, u: str) -> set[str]:
         """
         Returns the names of the proteins w/ at most `self.depth` levels away from u
@@ -129,7 +146,35 @@ class Graph:
 
 
         return ret
+    
 
+    # recursive impl with caching for N_depth
+    @lru_cache(maxsize=None)
+    def N_depth_diff(self, u: str, d: int) -> set[str]:
+        if d < 0:
+            return set()
+        if d == 0:
+            return {u}
+        else:
+            diff = self.N_depth_diff(u, d-1) - self.N_depth_diff(u, d-2)
+            ret = set()
+            for n in diff:
+                ret = ret | self.N(n)
+            
+            return ret
+        
+    @lru_cache(maxsize=None)
+    def N_depth_recursive(self, u:str) -> set[str]:
+        ret = set()
+        for i in range(0, self.depth+1):
+            ret = ret | self.N_depth_diff(u, i)
+        return ret
+
+
+    # Using nx native functions
+    @lru_cache(maxsize=None)
+    def N_depth_nx(self, u: str):
+        return set(nx.ego_graph(self.network, u, radius=self.depth).nodes)
 
     ########################
     # Functional Reliability
@@ -140,7 +185,9 @@ class Graph:
         if self.database is None:
             return set()
 
-        neighbors = self.N_depth(u) - {u}
+        # neighbors = self.N_depth(u) - {u}
+        neighbors = self.N_depth_recursive(u) - {u}
+        # neighbors = self.N_depth_nx(u) - {u}
         ret: set[str] = set()
 
         for n in neighbors:
@@ -164,31 +211,16 @@ class Graph:
 
         a_or_b = Fa | Fb
 
-        return len(a_or_b - a_and_b) / len(a_and_b)
+        ret =  len(a_or_b - a_and_b) / len(a_and_b)
+
+        logger.debug(f"Computed r1 of {a} -> {b}: {ret}")
+        return ret
 
 
 
     #####################
     # Functions that involve FS Weight
     ####################
-
-    def lmbda(self, u: set[str], v: set[str]) -> float:
-        """
-        lambda function, Bioinformatics equation 2
-        TODO modify further to include experimental sources
-
-        lambda = max(0, n_avg * r_int - ...)
-        were r_int is the fraction of all interaction pairs that share some function
-        """
-
-        diff = u - v
-        inter = u & v
-
-        return max(0, self._n_avg - (len(diff) + len(inter))  )
-
-
-
-
     def S_FS(self, u: str, v: str) -> float:
         """
         Simple FS Weight function
@@ -298,41 +330,52 @@ class Graph:
 
         # if greater than this value, considered as infinity
         EPSILON = 100000
+        # Lower Bound
+        GAMMA = 0.0001
 
         min_r1 = EPSILON
-        max_r1 = 0
+        max_r1 = GAMMA
 
         proteins_with_shared_count = 0
 
-        if verbose:
-            print("Running initial r1 computation for normalization")
+        logger.info("Running initial r1 computation for normalization")
 
         # calc each r1 for normalization, as well as r_int
         # the costly subroutines *should* be cached on computing r1
-        l = len(self.network.edges)
-        i = 1
-        for src, dst, _ in self.edges:
+        def compute_r1_and_shared(edge):
+            src, dst, _ = edge
 
-            if verbose:
-                print(f"{i}/{l}")
-                i += 1
+            shared = 0
 
             F_x = self.database.filter_functions(src, dst)
             F_y = self.database.filter_functions(dst, src)
             if len(F_x & F_y) > 0:
-                proteins_with_shared_count += 1
+                shared = 1
 
-            x = self.r1(src, dst)
-            if x > EPSILON: continue
+            r1 = self.r1(src, dst)
+            r1 = min(EPSILON, r1)
+            if r1 < GAMMA:
+                r1 = 0.0
 
-            min_r1 = min(min_r1, x)
-            max_r1 = max(max_r1, x)
+            return (r1, shared)
 
-            r_int = float(proteins_with_shared_count) / len(self.edges)
+        results = []
+        for edge in tqdm(self.edges, desc="Processing r1 and shared"):
+            results.append(compute_r1_and_shared(edge))
+
+        r1s = [x for x in map(lambda x: x[0], results) if x < EPSILON]
+        min_r1 = min(r1s)
+        max_r1 = max(r1s)
+
+        shared_proteins = list(map(lambda x: x[1], results))
+        proteins_with_shared_count = sum(shared_proteins)
+
+
+        r_int = float(proteins_with_shared_count) / len(self.edges)
 
         def R1(a: str, b: str) -> float|int:
             x = self.r1(a, b)
-            if x > EPSILON: return 1
+            if x >= EPSILON: return 1
 
             numerator = x - min_r1
             denominator = max_r1 - min_r1
@@ -342,8 +385,10 @@ class Graph:
                 return 0.0
 
         def SR_term(u: str, v: str) -> float:
-            Nu = self.N_depth(u)
-            Nv = self.N_depth(v)
+            Nu = self.N_depth_recursive(u)
+            Nv = self.N_depth_recursive(v)
+            # Nu = self.N_depth_nx(u)
+            # Nv = self.N_depth_nx(v)
             Nu_and_Nv = Nu & Nv
 
             _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
@@ -376,31 +421,21 @@ class Graph:
                 return 0.0
 
 
-        if verbose:
-            print("Running reweighting")
-
-        # actual reweighting
-        l = len(self.network.edges)
-        i = 1
-        if verbose:
-            print(f"Running on {l} edges")
-
-        for edge in self.network.edges:
+        def SR_edge(edge) -> tuple:
             u = edge[0]
             v = edge[1]
-
-            if verbose:
-                print(f"{i}: running func on: `{u}` and `{v}`; ", end='')
-
-
             weight = SR_term(u,v) * SR_term(v, u)
+            ret =  (u, v, weight)
 
-            if verbose:
-                print(f"{weight = }")
-
-            new_graph.append((u,v,weight))
-
-            i += 1
+            logger.debug(f"Ran on {u = } | {v = } ; {weight = }")
+            return ret
+        
+        logger.info("Running reweighting")
+        new_graph = []
+        for edge in tqdm(self.edges, desc="Processing edges using SR Function"):
+            new_graph.append(SR_edge(edge))
+        logger.info("Done Reweighting")
 
 
         self.edgelist_to_file(new_graph, save_path)
+

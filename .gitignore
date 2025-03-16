@@ -10,4 +10,7 @@ database/biogrid-sample.txt
 datasets/**
 database-files/**
 
+__cache_dir__/**
+__func_cache__/**
+
 scratch.py
