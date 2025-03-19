@@ -12,6 +12,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+EXP = "Experimental System"
+
 class Graph:
     def __init__(self, dataset_path: str, initial_depth:int = 0, database_path: str|None = None, sep:str = '\t'):
 
@@ -53,6 +55,9 @@ class Graph:
         self._n_avg = len(edges) / len(nodes)
 
 
+        
+
+
         self.database: Database|None = None
 
         self._name = dataset_path
@@ -60,17 +65,34 @@ class Graph:
         if database_path is not None:
             logger.info(f"Loading Database: {database_path}")
             self.database = Database(database_path, sep)
-            self.database.trim_rows(nodes)
             logger.info(f"Finished Loading Database")
 
-        # joblib caching
-        # self.N = Cache.cache(self.N)
-        # self.N_depth = Cache.cache(self.N_depth)
-        # self.N_depth_diff = Cache.cache(self.N_depth_diff)
-        # self.N_depth_recursive = Cache.cache(self.N_depth_recursive)
-        # self.N_depth_nx = Cache.cache(self.N_depth_nx)
-        # self.Functions = Functions_Cache.cache(self.Functions)
-        # self.r1 = Cache.cache(self.r1)
+            self.reliability_db = dict()
+            n = self.database.df.shape[0]
+            experiments = self.database.df[EXP]
+
+            for e in tqdm(experiments.unique(), "Computing reliability of experiments based on database"):
+                self.reliability_db[e] = (experiments == e).sum() / n
+
+
+            self.database.trim_rows(nodes)
+
+            # r_int
+            _r = 1
+            for u, v, _ in tqdm(self.edges, "Computing Fraction of pairs that share functions"):
+                Fx = self.database.filter_functions(u, v)
+                Fy = self.database.filter_functions(v, u)
+                if len(Fx & Fy) > 0:
+                    _r += 1
+
+            self.r_int = float(_r) / float(len(self.edges))
+            """
+            self.r_int = 0.45228124311218865
+            """
+
+            logger.info(f"{self.r_int = }")
+
+
         
 
 
@@ -98,7 +120,7 @@ class Graph:
     def edgelist_to_file(self, l: list, save_path: str|None):
 
         def mymap(x):
-            return f"{x[0]}\t{x[1]}\t{x[2]}"
+            return f"{x[0]}\t{x[1]}\t{x[2]:.16f}"
 
         if save_path is not None:
             with open(save_path, "w") as f:
@@ -439,3 +461,78 @@ class Graph:
 
         self.edgelist_to_file(new_graph, save_path)
 
+
+    def reweight_chua(self, save_path:str|None=None, verbose: bool = False) -> None:
+        """
+        chua FS weighting algo
+        """
+        assert self.database is not None
+
+        logger.info(f"Starting reweighting using Chua's algo with depth = {self.depth}")
+
+        N = self.N_depth_nx
+        r_int = self.r_int
+
+
+
+        @lru_cache(maxsize=None)
+        def r(u: str, v: str) -> float:
+            exps = self.database.filter_interactions(u, v)[EXP]
+            n = 1.0
+            for e in exps.unique():
+                n *= (1 - self.reliability_db[e]) ** (exps == e).sum()
+
+            return 1.0 - n
+        
+        @lru_cache(maxsize=None)
+        def SR_term(u: str, v: str) -> float:
+            Nu = N(u)
+            Nv = N(v)
+            Nu_and_Nv = Nu & Nv
+
+            _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
+
+            lmbda_uv = max(0, _term_uv)
+
+
+            numerator = 0.0
+            for w in Nu_and_Nv:
+                numerator += r(u, w) * r(v, w)
+            numerator *= 2.0
+
+            denominator_a = 0.0
+            for w in Nu:
+                denominator_a += r(u, w)
+
+            for w in Nu_and_Nv:
+                denominator_a += r(u, w) * (1 - r(v, w))
+
+            denominator_b = 0.0
+            for w in Nu_and_Nv:
+                denominator_b += r(u, w) * r(v, w)
+
+            denominator = denominator_a + (2 * denominator_b) + lmbda_uv
+
+            try:
+                return float(numerator) / float(denominator)
+            except:
+                return 0.0
+
+
+        @lru_cache(maxsize=None)
+        def SR_edge(u, v) -> tuple:
+
+            weight = SR_term(u,v) * SR_term(v, u)
+            ret =  (u, v, weight)
+
+            logger.debug(f"Ran on {u = } | {v = } ; {weight = }")
+            return ret
+        
+
+        new_graph = [SR_edge(u,v) for u,v,_ in tqdm(self.edges, "Running reweighting on graph")]
+
+        r.cache_clear()
+        SR_term.cache_clear()
+        SR_edge.cache_clear()
+
+        self.edgelist_to_file(new_graph, save_path)
