@@ -302,167 +302,164 @@ class Graph:
         return float(numerator/deno_1) * float(numerator/deno_2)
 
 
+    # def reweight(self, func, save_path = None, verbose = False) -> None:
+    #     '''
+    #     reweights graph based on function
+    #     '''
+
+    #     # func will return an edge weight based on its supplied vertices
+    #     # store the edge-weights
+    #     # put it in a list for saving jic
+    #     new_graph = []
+
+    #     l = len(self.network.edges)
+    #     i = 1
+    #     if verbose:
+    #         print(f"Running on {l} edges")
+
+    #     for edge in self.network.edges:
+    #         u = edge[0]
+    #         v = edge[1]
+
+    #         if verbose:
+    #             print(f"{i}: running func on: `{u}` and `{v}`; ", end='')
 
 
+    #         weight = func(u,v)
 
-    def reweight(self, func, save_path = None, verbose = False) -> None:
-        '''
-        reweights graph based on function
-        '''
+    #         if verbose:
+    #             print(f"{weight = }")
 
-        # func will return an edge weight based on its supplied vertices
-        # store the edge-weights
-        # put it in a list for saving jic
-        new_graph = []
+    #         new_graph.append((u,v,weight))
 
-        l = len(self.network.edges)
-        i = 1
-        if verbose:
-            print(f"Running on {l} edges")
-
-        for edge in self.network.edges:
-            u = edge[0]
-            v = edge[1]
-
-            if verbose:
-                print(f"{i}: running func on: `{u}` and `{v}`; ", end='')
+    #         i += 1
 
 
-            weight = func(u,v)
-
-            if verbose:
-                print(f"{weight = }")
-
-            new_graph.append((u,v,weight))
-
-            i += 1
+    #     self.edgelist_to_file(new_graph, save_path)
 
 
-        self.edgelist_to_file(new_graph, save_path)
+    # def reweight_with_reliability(self, save_path:str|None=None, verbose: bool = False):
+    #     '''
+    #     SR Function
+    #     '''
+
+    #     assert self.database is not None
+
+    #     new_graph = []
+
+    #     # if greater than this value, considered as infinity
+    #     EPSILON = 100000
+    #     # Lower Bound
+    #     GAMMA = 0.0001
+
+    #     min_r1 = EPSILON
+    #     max_r1 = GAMMA
+
+    #     proteins_with_shared_count = 0
+
+    #     logger.info("Running initial r1 computation for normalization")
+
+    #     # calc each r1 for normalization, as well as r_int
+    #     # the costly subroutines *should* be cached on computing r1
+    #     def compute_r1_and_shared(edge):
+    #         src, dst, _ = edge
+
+    #         shared = 0
+
+    #         F_x = self.database.filter_functions(src, dst)
+    #         F_y = self.database.filter_functions(dst, src)
+    #         if len(F_x & F_y) > 0:
+    #             shared = 1
+
+    #         r1 = self.r1(src, dst)
+    #         r1 = min(EPSILON, r1)
+    #         if r1 < GAMMA:
+    #             r1 = 0.0
+
+    #         return (r1, shared)
+
+    #     results = []
+    #     for edge in tqdm(self.edges, desc="Processing r1 and shared"):
+    #         results.append(compute_r1_and_shared(edge))
+
+    #     r1s = [x for x in map(lambda x: x[0], results) if x < EPSILON]
+    #     min_r1 = min(r1s)
+    #     max_r1 = max(r1s)
+
+    #     shared_proteins = list(map(lambda x: x[1], results))
+    #     proteins_with_shared_count = sum(shared_proteins)
 
 
-    def reweight_with_reliability(self, save_path:str|None=None, verbose: bool = False):
-        """
-        SR Function
-        """
+    #     r_int = float(proteins_with_shared_count) / len(self.edges)
 
-        assert self.database is not None
+    #     def R1(a: str, b: str) -> float|int:
+    #         x = self.r1(a, b)
+    #         if x >= EPSILON: return 1
 
-        new_graph = []
+    #         numerator = x - min_r1
+    #         denominator = max_r1 - min_r1
+    #         try:
+    #             return numerator / denominator
+    #         except:
+    #             return 0.0
 
-        # if greater than this value, considered as infinity
-        EPSILON = 100000
-        # Lower Bound
-        GAMMA = 0.0001
+    #     def SR_term(u: str, v: str) -> float:
+    #         Nu = self.N_depth_recursive(u)
+    #         Nv = self.N_depth_recursive(v)
+    #         # Nu = self.N_depth_nx(u)
+    #         # Nv = self.N_depth_nx(v)
+    #         Nu_and_Nv = Nu & Nv
 
-        min_r1 = EPSILON
-        max_r1 = GAMMA
+    #         _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
 
-        proteins_with_shared_count = 0
-
-        logger.info("Running initial r1 computation for normalization")
-
-        # calc each r1 for normalization, as well as r_int
-        # the costly subroutines *should* be cached on computing r1
-        def compute_r1_and_shared(edge):
-            src, dst, _ = edge
-
-            shared = 0
-
-            F_x = self.database.filter_functions(src, dst)
-            F_y = self.database.filter_functions(dst, src)
-            if len(F_x & F_y) > 0:
-                shared = 1
-
-            r1 = self.r1(src, dst)
-            r1 = min(EPSILON, r1)
-            if r1 < GAMMA:
-                r1 = 0.0
-
-            return (r1, shared)
-
-        results = []
-        for edge in tqdm(self.edges, desc="Processing r1 and shared"):
-            results.append(compute_r1_and_shared(edge))
-
-        r1s = [x for x in map(lambda x: x[0], results) if x < EPSILON]
-        min_r1 = min(r1s)
-        max_r1 = max(r1s)
-
-        shared_proteins = list(map(lambda x: x[1], results))
-        proteins_with_shared_count = sum(shared_proteins)
+    #         lmbda_uv = max(0, _term_uv)
 
 
-        r_int = float(proteins_with_shared_count) / len(self.edges)
+    #         # term a; the first term
+    #         numerator = 0.0
+    #         for w in Nu_and_Nv:
+    #             numerator += R1(u, w) * R1(v, w)
+    #         numerator *= 2.0
 
-        def R1(a: str, b: str) -> float|int:
-            x = self.r1(a, b)
-            if x >= EPSILON: return 1
+    #         denominator_a = 0.0
+    #         for w in Nu:
+    #             denominator_a += R1(u, w)
 
-            numerator = x - min_r1
-            denominator = max_r1 - min_r1
-            try:
-                return numerator / denominator
-            except:
-                return 0.0
+    #         for w in Nu_and_Nv:
+    #             denominator_a += R1(u, w) * (1 - R1(v, w))
 
-        def SR_term(u: str, v: str) -> float:
-            Nu = self.N_depth_recursive(u)
-            Nv = self.N_depth_recursive(v)
-            # Nu = self.N_depth_nx(u)
-            # Nv = self.N_depth_nx(v)
-            Nu_and_Nv = Nu & Nv
+    #         denominator_b = 0.0
+    #         for w in Nu_and_Nv:
+    #             denominator_b += R1(u, w) * R1(v, w)
 
-            _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
+    #         denominator = denominator_a + (2 * denominator_b) + lmbda_uv
 
-            lmbda_uv = max(0, _term_uv)
-
-
-            # term a; the first term
-            numerator = 0.0
-            for w in Nu_and_Nv:
-                numerator += R1(u, w) * R1(v, w)
-            numerator *= 2.0
-
-            denominator_a = 0.0
-            for w in Nu:
-                denominator_a += R1(u, w)
-
-            for w in Nu_and_Nv:
-                denominator_a += R1(u, w) * (1 - R1(v, w))
-
-            denominator_b = 0.0
-            for w in Nu_and_Nv:
-                denominator_b += R1(u, w) * R1(v, w)
-
-            denominator = denominator_a + (2 * denominator_b) + lmbda_uv
-
-            try:
-                return numerator / denominator
-            except:
-                return 0.0
+    #         try:
+    #             return numerator / denominator
+    #         except:
+    #             return 0.0
 
 
-        def SR_edge(edge) -> tuple:
-            u = edge[0]
-            v = edge[1]
-            weight = SR_term(u,v) * SR_term(v, u)
-            ret =  (u, v, weight)
+    #     def SR_edge(edge) -> tuple:
+    #         u = edge[0]
+    #         v = edge[1]
+    #         weight = SR_term(u,v) * SR_term(v, u)
+    #         ret =  (u, v, weight)
 
-            logger.debug(f"Ran on {u = } | {v = } ; {weight = }")
-            return ret
+    #         logger.debug(f"Ran on {u = } | {v = } ; {weight = }")
+    #         return ret
         
-        logger.info("Running reweighting")
-        new_graph = []
-        for edge in tqdm(self.edges, desc="Processing edges using SR Function"):
-            new_graph.append(SR_edge(edge))
-        logger.info("Done Reweighting")
+    #     logger.info("Running reweighting")
+    #     new_graph = []
+    #     for edge in tqdm(self.edges, desc="Processing edges using SR Function"):
+    #         new_graph.append(SR_edge(edge))
+    #     logger.info("Done Reweighting")
 
 
-        self.edgelist_to_file(new_graph, save_path)
+    #     self.edgelist_to_file(new_graph, save_path)
 
 
-    def reweight_chua(self, save_path:str|None=None, verbose: bool = False) -> None:
+    def reweight_chua(self, save_path:str, verbose: bool = False, save_cache: bool = False) -> None:
         """
         chua FS weighting algo
         """
@@ -529,7 +526,37 @@ class Graph:
             return ret
         
 
-        new_graph = [SR_edge(u,v) for u,v,_ in tqdm(self.edges, "Running reweighting on graph")]
+        # caching
+        cached_graph = []
+        cache_filename = save_path + ".cache"
+        if save_cache:
+            logger.info("Loading cache")
+            with open(cache_filename, 'r') as f:
+                for line in f.readlines():
+                    l = line.strip()
+                    x = l.split('\t')
+                    if len(x) != 3:
+                        x = l.split(" ")
+                    n1, n2, edge = x
+                    cached_graph.append((n1, n2, edge))
+            logger.info("Finished loading cache")
+
+        skip = len(cached_graph)
+        new_graph = cached_graph
+
+        for data in tqdm(self.edges, "Running reweighting on graph"):
+            if skip > 0:
+                skip -= 1
+                continue
+            else:
+                computed_edge = SR_edge(data[0],data[1])
+                new_graph.append(computed_edge)
+
+                if save_cache:
+                    with open(cache_filename, 'a') as f:
+                        f.write(f"{computed_edge[0]}\t{computed_edge[1]}\t{computed_edge[2]}\n")
+
+
 
         r.cache_clear()
         SR_term.cache_clear()

@@ -12,6 +12,7 @@ if __name__ == "__main__":
     parser.add_argument("--depth_to", "-dt", default=0, type=int, help="include up to depth n (must be geq than 0)")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--path", "-p", help="path to save reweighted graph")
+    parser.add_argument("--cache", "-c", action="store_true", help="cache computations?")
 
 
     args = parser.parse_args()
@@ -41,7 +42,7 @@ if __name__ == "__main__":
 
         print(f"Running Algoritm on {args.input_graph} with {depth = }")
         G.set_depth(depth)
-        G.reweight_chua(path, args.verbose)
+        G.reweight_chua(path, verbose=args.verbose, save_cache=args.cache)
         print("done")
 
 
