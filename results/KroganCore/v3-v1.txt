@@ -1,0 +1,5 @@
+,Statistic,Value
+0,Maximum Cluster Len,17
+1,Minimum Cluster Len,2
+2,Average Cluster Len,3
+3,Number of Clusters,46
