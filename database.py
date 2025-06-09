@@ -7,17 +7,12 @@ EXPERIMENT = "Experimental System"
 EXPERIMENT_TYPE = "Experimental System Type"
 SCORE = "Score"
 
+
 class Database:
-    def __init__(self, path:str, sep:str='\t'):
+    def __init__(self, path: str, sep: str = "\t"):
         self.df = pd.read_csv(path, sep=sep)
 
-        to_retain = [
-            NAME_A,
-            NAME_B,
-            EXPERIMENT,
-            EXPERIMENT_TYPE,
-            SCORE
-        ]
+        to_retain = [NAME_A, NAME_B, EXPERIMENT, EXPERIMENT_TYPE, SCORE]
 
         self.df = self.df[to_retain]
 
@@ -44,4 +39,3 @@ class Database:
         rows = self.filter_interactions(a, b)
         ret = set(rows[EXPERIMENT].unique())
         return ret
-

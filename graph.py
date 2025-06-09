@@ -8,24 +8,32 @@ from database import Database
 from functools import lru_cache
 import logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 EXP = "Experimental System"
 
-class Graph:
-    def __init__(self, dataset_path: str, initial_depth:int = 0, database_path: str|None = None, sep:str = '\t'):
 
+class Graph:
+    def __init__(
+        self,
+        dataset_path: str,
+        initial_depth: int = 0,
+        database_path: str | None = None,
+        sep: str = "\t",
+    ):
         edges = list()
         nodes = set()
 
         logger.info(f"Reading Dataset: {dataset_path}")
 
-        with open(dataset_path, 'r') as f:
+        with open(dataset_path, "r") as f:
             for line in f.readlines():
                 l = line.strip()
-                x = l.split('\t')
+                x = l.split("\t")
                 if len(x) != 3:
                     x = l.split(" ")
                 n1, n2, edge = x
@@ -40,7 +48,6 @@ class Graph:
         self.nodes = nodes
         self.network = nx.Graph()
 
-
         # getting neighbors
         # G.adj[n].items()
 
@@ -50,15 +57,10 @@ class Graph:
         assert initial_depth >= 0
         self.depth = initial_depth
 
-
         # reliability computation
         self._n_avg = len(edges) / len(nodes)
 
-
-        
-
-
-        self.database: Database|None = None
+        self.database: Database | None = None
 
         self._name = dataset_path
 
@@ -71,15 +73,19 @@ class Graph:
             n = self.database.df.shape[0]
             experiments = self.database.df[EXP]
 
-            for e in tqdm(experiments.unique(), "Computing reliability of experiments based on database"):
+            for e in tqdm(
+                experiments.unique(),
+                "Computing reliability of experiments based on database",
+            ):
                 self.reliability_db[e] = (experiments == e).sum() / n
-
 
             self.database.trim_rows(nodes)
 
             # r_int
             _r = 1
-            for u, v, _ in tqdm(self.edges, "Computing Fraction of pairs that share functions"):
+            for u, v, _ in tqdm(
+                self.edges, "Computing Fraction of pairs that share functions"
+            ):
                 Fx = self.database.filter_functions(u, v)
                 Fy = self.database.filter_functions(v, u)
                 if len(Fx & Fy) > 0:
@@ -91,10 +97,6 @@ class Graph:
             """
 
             logger.info(f"{self.r_int = }")
-
-
-        
-
 
     def set_depth(self, n: int):
         assert isinstance(n, int)
@@ -108,17 +110,13 @@ class Graph:
         self.r1.cache_clear()
         # Cache.clear()
 
-
     def visualize(self):
         _nt = Network()
         _nt.from_nx(self.network)
 
+        _nt.show("index.html", notebook=False)
 
-        _nt.show('index.html', notebook=False)
-
-
-    def edgelist_to_file(self, l: list, save_path: str|None):
-
+    def edgelist_to_file(self, l: list, save_path: str | None):
         def mymap(x):
             return f"{x[0]}\t{x[1]}\t{x[2]:.16f}"
 
@@ -141,7 +139,6 @@ class Graph:
         for nbr, _ in self.network.adj[u].items():
             ret.add(nbr)
 
-
         return ret
 
     # @lru_cache(maxsize=None)
@@ -152,23 +149,20 @@ class Graph:
         k = self.depth
         assert k > -1
 
-
         ret = {u}
 
         just_added = {u}
-        
+
         # wont run on k = 0, for range(1,1) doesnt run
-        for _ in range(1, k+1):
+        for _ in range(1, k + 1):
             new_neighbors = set()
             for n in list(just_added):
-                new_neighbors  = new_neighbors | self.N(n)
+                new_neighbors = new_neighbors | self.N(n)
 
             just_added = new_neighbors - ret
-            ret =  ret | just_added
-
+            ret = ret | just_added
 
         return ret
-    
 
     # recursive impl with caching for N_depth
     @lru_cache(maxsize=None)
@@ -178,20 +172,19 @@ class Graph:
         if d == 0:
             return {u}
         else:
-            diff = self.N_depth_diff(u, d-1) - self.N_depth_diff(u, d-2)
+            diff = self.N_depth_diff(u, d - 1) - self.N_depth_diff(u, d - 2)
             ret = set()
             for n in diff:
                 ret = ret | self.N(n)
-            
+
             return ret
-        
+
     @lru_cache(maxsize=None)
-    def N_depth_recursive(self, u:str) -> set[str]:
+    def N_depth_recursive(self, u: str) -> set[str]:
         ret = set()
-        for i in range(0, self.depth+1):
+        for i in range(0, self.depth + 1):
             ret = ret | self.N_depth_diff(u, i)
         return ret
-
 
     # Using nx native functions
     @lru_cache(maxsize=None)
@@ -203,7 +196,6 @@ class Graph:
     ########################
     @lru_cache(maxsize=None)
     def Functions(self, u: str) -> set[str]:
-
         if self.database is None:
             return set()
 
@@ -220,7 +212,8 @@ class Graph:
 
     @lru_cache(maxsize=None)
     def r1(self, a: str, b: str):
-        if self.database is None: return 1
+        if self.database is None:
+            return 1
 
         Fa = self.Functions(a)
         Fb = self.Functions(b)
@@ -233,12 +226,10 @@ class Graph:
 
         a_or_b = Fa | Fb
 
-        ret =  len(a_or_b - a_and_b) / len(a_and_b)
+        ret = len(a_or_b - a_and_b) / len(a_and_b)
 
         logger.debug(f"Computed r1 of {a} -> {b}: {ret}")
         return ret
-
-
 
     #####################
     # Functions that involve FS Weight
@@ -253,23 +244,16 @@ class Graph:
         n_u = N(u)
         n_v = N(v)
 
-
         u_and_v = n_u & n_v
         u_min_v = n_u - n_v
         v_min_u = n_v - n_u
-
-
-
 
         numerator = 2 * len(u_and_v)
 
         deno_1 = len(u_min_v) + numerator + self.lmbda(n_u, n_v)
         deno_2 = len(v_min_u) + numerator + self.lmbda(n_v, n_u)
 
-
-        return float(numerator/deno_1) * float(numerator/deno_2)
-
-
+        return float(numerator / deno_1) * float(numerator / deno_2)
 
     def Depth_FS(self, u: str, v: str) -> float:
         """
@@ -281,26 +265,19 @@ class Graph:
 
         N = lambda x: self.N_depth(x, d)
 
-
         n_u = N(u)
         n_v = N(v)
-
 
         u_and_v = n_u & n_v
         u_min_v = n_u - n_v
         v_min_u = n_v - n_u
-
-
-
 
         numerator = 2 * len(u_and_v)
 
         deno_1 = len(u_min_v) + numerator + self.lmbda(n_u, n_v)
         deno_2 = len(v_min_u) + numerator + self.lmbda(n_v, n_u)
 
-
-        return float(numerator/deno_1) * float(numerator/deno_2)
-
+        return float(numerator / deno_1) * float(numerator / deno_2)
 
     # def reweight(self, func, save_path = None, verbose = False) -> None:
     #     '''
@@ -324,7 +301,6 @@ class Graph:
     #         if verbose:
     #             print(f"{i}: running func on: `{u}` and `{v}`; ", end='')
 
-
     #         weight = func(u,v)
 
     #         if verbose:
@@ -334,9 +310,7 @@ class Graph:
 
     #         i += 1
 
-
     #     self.edgelist_to_file(new_graph, save_path)
-
 
     # def reweight_with_reliability(self, save_path:str|None=None, verbose: bool = False):
     #     '''
@@ -389,7 +363,6 @@ class Graph:
     #     shared_proteins = list(map(lambda x: x[1], results))
     #     proteins_with_shared_count = sum(shared_proteins)
 
-
     #     r_int = float(proteins_with_shared_count) / len(self.edges)
 
     #     def R1(a: str, b: str) -> float|int:
@@ -413,7 +386,6 @@ class Graph:
     #         _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
 
     #         lmbda_uv = max(0, _term_uv)
-
 
     #         # term a; the first term
     #         numerator = 0.0
@@ -439,7 +411,6 @@ class Graph:
     #         except:
     #             return 0.0
 
-
     #     def SR_edge(edge) -> tuple:
     #         u = edge[0]
     #         v = edge[1]
@@ -448,18 +419,18 @@ class Graph:
 
     #         logger.debug(f"Ran on {u = } | {v = } ; {weight = }")
     #         return ret
-        
+
     #     logger.info("Running reweighting")
     #     new_graph = []
     #     for edge in tqdm(self.edges, desc="Processing edges using SR Function"):
     #         new_graph.append(SR_edge(edge))
     #     logger.info("Done Reweighting")
 
-
     #     self.edgelist_to_file(new_graph, save_path)
 
-
-    def reweight_chua(self, save_path:str, verbose: bool = False, save_cache: bool = False) -> None:
+    def reweight_chua(
+        self, save_path: str, verbose: bool = False, save_cache: bool = False
+    ) -> None:
         """
         chua FS weighting algo
         """
@@ -470,8 +441,6 @@ class Graph:
         N = self.N_depth_nx
         r_int = self.r_int
 
-
-
         @lru_cache(maxsize=None)
         def r(u: str, v: str) -> float:
             exps = self.database.filter_interactions(u, v)[EXP]
@@ -480,7 +449,7 @@ class Graph:
                 n *= (1 - self.reliability_db[e]) ** (exps == e).sum()
 
             return 1.0 - n
-        
+
         @lru_cache(maxsize=None)
         def SR_term(u: str, v: str) -> float:
             Nu = N(u)
@@ -490,7 +459,6 @@ class Graph:
             _term_uv = self._n_avg * r_int - (len(Nu - Nv) + len(Nu & Nv))
 
             lmbda_uv = max(0, _term_uv)
-
 
             numerator = 0.0
             for w in Nu_and_Nv:
@@ -515,26 +483,23 @@ class Graph:
             except:
                 return 0.0
 
-
         @lru_cache(maxsize=None)
         def SR_edge(u, v) -> tuple:
-
-            weight = SR_term(u,v) * SR_term(v, u)
-            ret =  (u, v, weight)
+            weight = SR_term(u, v) * SR_term(v, u)
+            ret = (u, v, weight)
 
             logger.debug(f"Ran on {u = } | {v = } ; {weight = }")
             return ret
-        
 
         # caching
         cached_graph = []
         cache_filename = save_path + ".cache"
         if save_cache:
             logger.info("Loading cache")
-            with open(cache_filename, 'r') as f:
+            with open(cache_filename, "r") as f:
                 for line in f.readlines():
                     l = line.strip()
-                    x = l.split('\t')
+                    x = l.split("\t")
                     if len(x) != 3:
                         x = l.split(" ")
                     n1, n2, edge = x
@@ -549,14 +514,14 @@ class Graph:
                 skip -= 1
                 continue
             else:
-                computed_edge = SR_edge(data[0],data[1])
+                computed_edge = SR_edge(data[0], data[1])
                 new_graph.append(computed_edge)
 
                 if save_cache:
-                    with open(cache_filename, 'a') as f:
-                        f.write(f"{computed_edge[0]}\t{computed_edge[1]}\t{computed_edge[2]}\n")
-
-
+                    with open(cache_filename, "a") as f:
+                        f.write(
+                            f"{computed_edge[0]}\t{computed_edge[1]}\t{computed_edge[2]}\n"
+                        )
 
         r.cache_clear()
         SR_term.cache_clear()
