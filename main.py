@@ -36,7 +36,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # print(args.input_graph, args.database_path, args.depth, args.verbose, args.path)
     from graph import Graph
 
     G = Graph(dataset_path=args.input_graph, database_path=args.database_path)
@@ -63,39 +62,3 @@ if __name__ == "__main__":
         G.set_depth(depth)
         G.reweight_chua(path, verbose=args.verbose, save_cache=args.cache)
         print("done")
-
-
-"""
-scratch
-from graph import Graph
-
-
-G = Graph("./dataset.txt")
-
-print(G.N("YAL033W"))
-
-G.visualize()
-
-
------
-
-TARGET = "Collins"
-trials = 4
-
-def ppath(dataset, trialno = None):
-    p = "./datasets/"
-    if trialno is None:
-        return p + dataset + ".txt"
-    else:
-        return p + dataset + f"v{trialno}.txt"
-
-G = Graph(ppath(TARGET), database_path="./database-files/BIOGRID.txt")
-
-
-for i in range(trials):
-    run = i+1
-    print("Starting run", run)
-    G.set_depth(run)
-    G.reweight_with_reliability(ppath(TARGET, run),True)
-    print("Finished run", run)
-"""
